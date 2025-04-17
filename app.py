@@ -22,10 +22,11 @@ if not creds_json:
 creds_dict = json.loads(creds_json)
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
+file_name = os.getenv("file_name")
 
 def load_data(client):
     def get_timesheets(client):
-        sheet = client.open('weekly_time_data').sheet1
+        sheet = client.open(file_name).sheet1
         data = sheet.get_all_records()
         df = pd.DataFrame(data[1:], columns=data[0])  # first row as column names
         df=df[['username','fname','local_date','local_end_time','hours','jobcode_1','jobcode_2']]
@@ -37,7 +38,7 @@ def load_data(client):
 
         return df
     def get_alloc(client):
-        sheet = client.open('weekly_time_data').get_worksheet(1)
+        sheet = client.open(file_name).get_worksheet(1)
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
         df.columns = ['recruiter','recruiter_hours', 'trs','trs_hours','acct_owner','client','job','billing_code']
