@@ -9,8 +9,8 @@ import os
 import json
 
 #local testing only
-# from dotenv import load_dotenv
-# load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
 
 #load and clean data
 
