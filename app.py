@@ -136,7 +136,8 @@ recruiter_colors = {recruiter: colors[i % len(colors)] for i, recruiter in enume
 
 
 #define app
-app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+server = app.server
 
 
 #generate progress bar components (label, bar, button, table, overbilled_alert) for arbitrary level of detail
