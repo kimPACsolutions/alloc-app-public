@@ -9,8 +9,8 @@ import os
 import json
 
 #local testing only
-from dotenv import load_dotenv
-load_dotenv()
+# from dotenv import load_dotenv
+# load_dotenv()
 
 #load and clean data
 
@@ -22,7 +22,7 @@ if not creds_json:
 creds_dict = json.loads(creds_json)
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
-file_name = os.getenv("file_name")
+file_name = os.getenv('file_name')
 
 def load_data(client):
     def get_timesheets(client):
@@ -35,10 +35,11 @@ def load_data(client):
         df['billing_code'] = df.apply(  
             lambda row: row['jobcode_1'] if pd.isna(row['jobcode_2']) or row['jobcode_2'] == '' 
             else row['jobcode_1'] + ' > ' + row['jobcode_2'], axis=1)
-
+        
         return df
+    
     def get_alloc(client):
-        sheet = client.open(file_name).get_worksheet(1)
+        sheet = client.open('weekly_time_data').get_worksheet(1)
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
         df.columns = ['recruiter','recruiter_hours', 'trs','trs_hours','acct_owner','client','job','billing_code']
@@ -78,7 +79,6 @@ def load_data(client):
         right_on = ['billing_code', 'recruiter'],
     )[['fname', 'recruiter', 'billing_code', 'hours', 'recruiter_hours', 'client', 'job']]
     combined_table.rename(columns={'hours': 'hours_actual','recruiter_hours': 'hours_allocated'}, inplace=True)
-
 
     #combined table cleanup
 
@@ -242,19 +242,6 @@ def generate_top_level_container(label, bar, button, table, alert):
         ], style={'margin-bottom':0})
     return container
 
-#callback for button to toggle table visibility
-@app.callback(
-    Output({'type':'table', 'id':MATCH}, 'style'),
-    Input({'type':'button', 'id':MATCH}, 'n_clicks'),
-    State({'type':'table', 'id':MATCH}, 'style')
-)
-def toggle_table(n_clicks, current_style):
-    if n_clicks > 0:
-        if n_clicks %2 ==1:
-            return {'display': 'block'}
-        else:
-            return {'display': 'none'}
-    return current_style
 
 #generate all visuals for selected levels of detail
 def generate_multilevel(df, levels):
@@ -291,13 +278,46 @@ containers = generate_multilevel(combined_table, ['client','billing_code'])
 
 #layout
 app.layout = dbc.Container([
-    html.Div("Time Allocation Snapshot", style={"font-size": "24px", "font-weight": "bold", 'text-align':'center'}),
+    html.Div("Time Allocation Snapshot", style={"font-size": "24px", "font-weight": "bold", 'text-align':'center', 'margin-top':20}),
     dbc.Row([
         html.Div("Weekly Progress Bars", style={"font-size": "20px", "font-weight": "bold", 'margin-bottom':10}),
-        dbc.Stack(containers, gap=2)
+        dbc.Stack(containers, gap=2, id='containers')
     ]),
-    html.Div(f"Last updated: {update_date}", id="update_date_label")
+    html.Div(f"Last updated: {update_date}", id="update_date_label"),
+    dbc.Row([dbc.Button("", id="refresh_button", n_clicks=0, style={'margin-top':0, 'opacity':0})], justify='left')
 ])
+
+#toggle table buttons
+@app.callback(
+    Output({'type':'table', 'id':MATCH}, 'style'), 
+    Input({'type':'button', 'id':MATCH}, 'n_clicks'),
+    State({'type':'table', 'id':MATCH}, 'style') 
+)
+def toggle_table(n_clicks, current_style):
+    if n_clicks > 0:
+        if n_clicks %2 ==1:
+            return {'display': 'block'}
+        else:
+            return {'display': 'none'}
+    return current_style
+
+#refresh data
+@app.callback(
+    Output('update_date_label', 'children'),
+    Output('containers', 'children'),
+    Input('refresh_button', 'n_clicks')
+)
+def refresh_data(n_clicks):
+    if n_clicks > 0:
+        print(f'refresh_data called, n_clicks: {n_clicks}')
+        #refresh data
+        global combined_table, update_date
+        combined_table, update_date = load_data(client)
+        update_date_label = f"Last updated: {update_date}"
+        #refresh bars
+        containers = generate_multilevel(combined_table, ['client','billing_code'])
+        return update_date_label, containers
+    return dash.no_update
 
 #run app
 if __name__ == "__main__":
