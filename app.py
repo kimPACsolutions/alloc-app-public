@@ -2,15 +2,13 @@ import pandas as pd
 import dash
 import dash_bootstrap_components as dbc
 from dash import html
+from dash import dcc
 from dash.dependencies import Input, Output, State, MATCH
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
 import json
 
-#local testing only
-# from dotenv import load_dotenv
-# load_dotenv()
 
 #load and clean data
 
@@ -280,6 +278,7 @@ containers = generate_multilevel(combined_table, ['client','billing_code'])
 #layout
 app.layout = dbc.Container([
     html.Div("Time Allocation Snapshot", style={"font-size": "24px", "font-weight": "bold", 'text-align':'center', 'margin-top':20}),
+    dcc.Dropdown(recruiters, id='recruiter_filter', multi=True, placeholder="Select Recruiters", style={'width':'50%', 'margin-bottom':10}),
     dbc.Row([
         html.Div("Weekly Progress Bars", style={"font-size": "20px", "font-weight": "bold", 'margin-bottom':10}),
         dbc.Stack(containers, gap=2, id='containers')
@@ -302,23 +301,38 @@ def toggle_table(n_clicks, current_style):
             return {'display': 'none'}
     return current_style
 
-#refresh data
+#data refresh and filters - combined since both affect containers
 @app.callback(
     Output('update_date_label', 'children'),
     Output('containers', 'children'),
-    Input('refresh_button', 'n_clicks')
+    Input('refresh_button', 'n_clicks'),
+    Input('recruiter_filter', 'value')
 )
-def refresh_data(n_clicks):
-    if n_clicks > 0:
-        print(f'refresh_data called, n_clicks: {n_clicks}')
-        #refresh data
-        global combined_table, update_date
+def update_data(n_clicks, selected_users):
+    global combined_table, update_date
+
+    #branch by input trigger
+    ctx = dash.callback_context
+    if ctx.triggered:
+        trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    
+    #refresh data if refresh button clicked
+    if trigger_id == 'refresh_button' and n_clicks > 0:
         combined_table, update_date = load_data(client)
-        update_date_label = f"Last updated: {update_date}"
-        #refresh bars
-        containers = generate_multilevel(combined_table, ['client','billing_code'])
-        return update_date_label, containers
-    return dash.no_update
+    
+    #filter if filter applied - include data for all jobs where selected users are listed as recruiter
+    if selected_users:
+        recruiter_filtered_data = combined_table[combined_table['recruiter'].isin(selected_users)]
+        billing_codes_to_include = recruiter_filtered_data['billing_code'].unique()
+        combined_table_filtered = combined_table[combined_table['billing_code'].isin(billing_codes_to_include)]
+    else:
+        combined_table_filtered = combined_table
+
+    #generate containers, update_date label
+    containers = generate_multilevel(combined_table_filtered, ['client','billing_code'])
+    update_date_label = f"Last updated: {update_date}"
+
+    return update_date_label, containers
 
 #run app
 if __name__ == "__main__":
